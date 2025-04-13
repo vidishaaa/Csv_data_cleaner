@@ -1,7 +1,7 @@
 # 🧽 CSV Data Cleaner
 
 A simple and powerful Shell + Python-based tool to clean messy CSV files.  
-Removes null values, trims whitespace, and fixes date formats using pandas — all wrapped inside a user-friendly shell script.
+Removes null values, trims whitespace, and fixes date formats using pandas — all wrapped inside a user-friendly shell script and deployed on Streamlit
 
 ---
 
