@@ -92,6 +92,63 @@ def generate_data_profile(df: pd.DataFrame) -> None:
     logger.info("\nSample Values:")
     logger.info(df.head())
 
+def handle_missing_values(df: pd.DataFrame, strategy: str = 'drop', fill_value: Optional[dict] = None) -> pd.DataFrame:
+    """
+    Handle missing values in the dataframe using different strategies.
+
+    Parameters:
+    - df: DataFrame to handle missing values
+    - strategy: The strategy to use for handling missing values.
+                Options: 'drop', 'fill', 'mean', 'median', 'mode', 'forward_fill', 'backward_fill'
+    - fill_value: A dictionary with column names as keys and the fill values as values, for custom filling.
+    
+    Returns:
+    - df: DataFrame with handled missing values
+    """
+    if strategy == 'drop':
+        # Drop rows with any missing values
+        df = df.dropna()
+        logger.info("Dropped rows with missing values.")
+    
+    elif strategy == 'fill':
+        # Fill missing values with a specific value for each column (if fill_value is provided)
+        if fill_value is not None:
+            df = df.fillna(fill_value)
+            logger.info(f"Filled missing values with the provided values: {fill_value}")
+        else:
+            logger.warning("No fill value provided for 'fill' strategy.")
+    
+    elif strategy == 'mean':
+        # Fill missing values with the mean of the column
+        df = df.fillna(df.mean())
+        logger.info("Filled missing values with column means.")
+    
+    elif strategy == 'median':
+        # Fill missing values with the median of the column
+        df = df.fillna(df.median())
+        logger.info("Filled missing values with column medians.")
+    
+    elif strategy == 'mode':
+        # Fill missing values with the mode (most frequent value) of the column
+        df = df.fillna(df.mode().iloc[0])
+        logger.info("Filled missing values with column mode.")
+    
+    elif strategy == 'forward_fill':
+        # Forward fill missing values (use previous row value)
+        df = df.ffill()
+        logger.info("Forward-filled missing values.")
+    
+    elif strategy == 'backward_fill':
+        # Backward fill missing values (use next row value)
+        df = df.bfill()
+        logger.info("Backward-filled missing values.")
+    
+    else:
+        logger.error(f"Unknown strategy '{strategy}' for handling missing values.")
+        raise ValueError(f"Unknown strategy '{strategy}' for handling missing values.")
+    
+    return df
+
 def main():
     try:
         # Get input and output file names from command line
@@ -112,7 +169,7 @@ def main():
 
         # Cleaning steps
         logger.info("Starting data cleaning process...")
-        
+
         # Remove duplicates
         initial_rows = len(df)
         df = df.drop_duplicates()
@@ -137,10 +194,9 @@ def main():
             df = detect_outliers(df, numeric_columns)
             logger.info(f"Removed {initial_rows - len(df)} rows with outliers")
 
-        # Remove rows with null values
-        initial_rows = len(df)
-        df = df.dropna()
-        logger.info(f"Removed {initial_rows - len(df)} rows with null values")
+        # Handle missing values (Example: 'drop', 'fill', 'mean', 'median', 'mode', 'forward_fill', 'backward_fill')
+        df = handle_missing_values(df, strategy='mean')  # Example: Use 'mean' to fill missing values
+        logger.info("Handled missing values")
 
         # Generate final profile
         logger.info("\nFinal data profile:")
