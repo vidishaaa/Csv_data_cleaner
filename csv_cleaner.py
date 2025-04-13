@@ -1,214 +1,135 @@
 import pandas as pd
-import numpy as np
-import sys
+import streamlit as st
 import logging
-from datetime import datetime
-import re
-from typing import List, Optional
 
-# Set up logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
+logging.basicConfig(level=logging.INFO)
+
+# --- Streamlit Page Config ---
+st.set_page_config(
+    page_title="CSV Data Cleaner",
+    page_icon="🧹",
+    layout="centered"
 )
-logger = logging.getLogger(__name__)
 
-def detect_outliers(df: pd.DataFrame, columns: List[str], n_std: float = 3) -> pd.DataFrame:
-    """Remove outliers based on z-score method."""
-    for column in columns:
-        if df[column].dtype in ['int64', 'float64']:
-            z_scores = np.abs((df[column] - df[column].mean()) / df[column].std())
-            df = df[z_scores < n_std]
-    return df
+# --- Custom CSS Styling ---
+def local_css():
+    st.markdown("""
+        <style>
+            body {
+                background-image: linear-gradient(to right, #e0f7fa, #f1f8e9);
+                font-family: 'Segoe UI', sans-serif;
+            }
+            .title {
+                font-size: 40px !important;
+                font-weight: bold;
+                color: #2E8B57;
+                text-align: center;
+            }
+            .subtitle {
+                font-size: 20px;
+                color: #555;
+                margin-bottom: 15px;
+            }
+            .stButton>button, .stDownloadButton>button {
+                background-color: #2E8B57;
+                color: white;
+                font-weight: bold;
+                border-radius: 10px;
+                padding: 10px 20px;
+            }
+        </style>
+    """, unsafe_allow_html=True)
 
-def clean_string_columns(df: pd.DataFrame) -> pd.DataFrame:
-    """Advanced string cleaning for text columns."""
-    for col in df.select_dtypes(include='object').columns:
-        # Convert to string type first to handle any mixed types
-        df[col] = df[col].astype(str)
-        
-        # Apply cleaning operations
-        df[col] = df[col].apply(lambda x: x.strip()  # Remove leading/trailing whitespace
-                               .lower()  # Convert to lowercase
-                               .replace('\n', ' ')  # Remove newlines
-                               .replace('\t', ' ')  # Remove tabs
-                               )
-        
-        # Remove multiple spaces
-        df[col] = df[col].apply(lambda x: re.sub(' +', ' ', x))
-        
-        # Remove special characters but keep basic punctuation
-        df[col] = df[col].apply(lambda x: re.sub(r'[^a-z0-9\s.,!?-]', '', x))
-    
-    return df
+local_css()
 
-def infer_and_convert_types(df: pd.DataFrame) -> pd.DataFrame:
-    """Infer and convert column types."""
-    # Try to convert numeric columns
-    for col in df.columns:
-        # Skip date columns
-        if 'date' in col.lower():
-            continue
-            
-        # Try converting to numeric
-        try:
-            num_values = pd.to_numeric(df[col], errors='coerce')
-            # If more than 80% of values are numeric, convert the column
-            if num_values.notna().sum() / len(df) > 0.8:
-                df[col] = num_values
-        except:
-            continue
-    
-    return df
+st.markdown('<div class="title">🧹 CSV Data Cleaner</div>', unsafe_allow_html=True)
+st.markdown('<p class="subtitle">Clean messy CSVs — handle nulls, remove duplicates, and more!</p>', unsafe_allow_html=True)
+st.markdown("---")
 
-def convert_dates(df: pd.DataFrame, date_formats: Optional[List[str]] = None) -> pd.DataFrame:
-    """Convert date columns with multiple format support."""
-    if date_formats is None:
-        date_formats = ['%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y', '%Y/%m/%d', 
-                       '%d-%m-%Y', '%m-%d-%Y', '%Y%m%d']
-    
-    for col in df.columns:
-        if 'date' in col.lower():
-            # Try each format
-            for date_format in date_formats:
-                try:
-                    df[col] = pd.to_datetime(df[col], format=date_format, errors='coerce')
-                    if df[col].notna().sum() > 0:  # If successful conversion
-                        break
-                except:
-                    continue
-    
-    return df
+uploaded_file = st.file_uploader("📁 Upload your CSV file", type=["csv"])
 
-def generate_data_profile(df: pd.DataFrame) -> None:
-    """Generate basic data profile."""
-    logger.info("\nData Profile:")
-    logger.info(f"Total Rows: {len(df)}")
-    logger.info(f"Total Columns: {len(df.columns)}")
-    logger.info("\nMissing Values:")
-    logger.info(df.isnull().sum())
-    logger.info("\nData Types:")
-    logger.info(df.dtypes)
-    logger.info("\nSample Values:")
-    logger.info(df.head())
-
-def handle_missing_values(df: pd.DataFrame, strategy: str = 'drop', fill_value: Optional[dict] = None) -> pd.DataFrame:
-    """
-    Handle missing values in the dataframe using different strategies.
-
-    Parameters:
-    - df: DataFrame to handle missing values
-    - strategy: The strategy to use for handling missing values.
-                Options: 'drop', 'fill', 'mean', 'median', 'mode', 'forward_fill', 'backward_fill'
-    - fill_value: A dictionary with column names as keys and the fill values as values, for custom filling.
-    
-    Returns:
-    - df: DataFrame with handled missing values
-    """
-    if strategy == 'drop':
-        # Drop rows with any missing values
+# --- Null Handling Logic ---
+def handle_nulls(df, method):
+    if method == "Drop rows with nulls":
         df = df.dropna()
-        logger.info("Dropped rows with missing values.")
-    
-    elif strategy == 'fill':
-        # Fill missing values with a specific value for each column (if fill_value is provided)
-        if fill_value is not None:
-            df = df.fillna(fill_value)
-            logger.info(f"Filled missing values with the provided values: {fill_value}")
-        else:
-            logger.warning("No fill value provided for 'fill' strategy.")
-    
-    elif strategy == 'mean':
-        # Fill missing values with the mean of the column
-        df = df.fillna(df.mean())
-        logger.info("Filled missing values with column means.")
-    
-    elif strategy == 'median':
-        # Fill missing values with the median of the column
-        df = df.fillna(df.median())
-        logger.info("Filled missing values with column medians.")
-    
-    elif strategy == 'mode':
-        # Fill missing values with the mode (most frequent value) of the column
-        df = df.fillna(df.mode().iloc[0])
-        logger.info("Filled missing values with column mode.")
-    
-    elif strategy == 'forward_fill':
-        # Forward fill missing values (use previous row value)
-        df = df.ffill()
-        logger.info("Forward-filled missing values.")
-    
-    elif strategy == 'backward_fill':
-        # Backward fill missing values (use next row value)
-        df = df.bfill()
-        logger.info("Backward-filled missing values.")
-    
-    else:
-        logger.error(f"Unknown strategy '{strategy}' for handling missing values.")
-        raise ValueError(f"Unknown strategy '{strategy}' for handling missing values.")
-    
+    elif method == "Fill with N/A":
+        df = df.fillna("N/A")
+    elif method == "Fill with 0":
+        df = df.fillna(0)
+    elif method == "Fill with column mean":
+        df = df.fillna(df.mean(numeric_only=True))
+    elif method == "Fill with column median":
+        df = df.fillna(df.median(numeric_only=True))
+    elif method == "Drop columns with >50% nulls":
+        threshold = len(df) * 0.5
+        df = df.dropna(thresh=threshold, axis=1)
     return df
 
-def main():
+# --- Cleaning Function ---
+def clean_csv(file, null_option):
     try:
-        # Get input and output file names from command line
-        if len(sys.argv) != 3:
-            logger.error("Usage: python csv_cleaner.py input_file.csv output_file.csv")
-            sys.exit(1)
-            
-        input_file = sys.argv[1]
-        output_file = sys.argv[2]
+        df = pd.read_csv(file)
 
-        # Read CSV
-        logger.info(f"Reading file: {input_file}")
-        df = pd.read_csv(input_file, low_memory=False)
-        
-        # Generate initial profile
-        logger.info("Initial data profile:")
-        generate_data_profile(df)
+        st.markdown("### 📌 Original Data Preview")
+        st.dataframe(df.head(), use_container_width=True)
 
-        # Cleaning steps
-        logger.info("Starting data cleaning process...")
+        # Clean column names
+        df.columns = [col.strip().lower().replace(" ", "_") for col in df.columns]
 
-        # Remove duplicates
-        initial_rows = len(df)
-        df = df.drop_duplicates()
-        logger.info(f"Removed {initial_rows - len(df)} duplicate rows")
+        # Drop duplicates
+        df.drop_duplicates(inplace=True)
 
-        # Clean string columns
-        df = clean_string_columns(df)
-        logger.info("Completed string cleaning")
+        # Drop fully empty rows/cols
+        df.dropna(how="all", inplace=True)
+        df.dropna(axis=1, how="all", inplace=True)
 
-        # Convert dates
-        df = convert_dates(df)
-        logger.info("Completed date conversion")
+        # Null handling
+        df = handle_nulls(df, null_option)
 
-        # Infer and convert types
-        df = infer_and_convert_types(df)
-        logger.info("Completed type inference and conversion")
+        st.success("✅ Cleaning Complete!")
+        st.markdown("### ✨ Cleaned Data Preview")
+        st.dataframe(df.head(), use_container_width=True)
 
-        # Remove outliers from numeric columns
-        numeric_columns = df.select_dtypes(include=['int64', 'float64']).columns
-        if len(numeric_columns) > 0:
-            initial_rows = len(df)
-            df = detect_outliers(df, numeric_columns)
-            logger.info(f"Removed {initial_rows - len(df)} rows with outliers")
-
-        # Handle missing values (Example: 'drop', 'fill', 'mean', 'median', 'mode', 'forward_fill', 'backward_fill')
-        df = handle_missing_values(df, strategy='mean')  # Example: Use 'mean' to fill missing values
-        logger.info("Handled missing values")
-
-        # Generate final profile
-        logger.info("\nFinal data profile:")
-        generate_data_profile(df)
-
-        # Save clean file
-        df.to_csv(output_file, index=False)
-        logger.info(f"✅ Success! Cleaned file saved as: {output_file}")
+        return df
 
     except Exception as e:
-        logger.error(f"An error occurred: {str(e)}")
-        sys.exit(1)
+        logging.error(f"Error: {e}")
+        st.error(f"🚨 Error cleaning CSV: {e}")
+        return None
 
-if __name__ == "__main__":
-    main()
+# --- App Logic ---
+if uploaded_file:
+    st.markdown("### 🧪 Choose how to handle NULL values")
+    null_option = st.selectbox("How should we handle missing values?", [
+        "Drop rows with nulls",
+        "Fill with N/A",
+        "Fill with 0",
+        "Fill with column mean",
+        "Fill with column median",
+        "Drop columns with >50% nulls"
+    ])
+
+    # Add a button to trigger the cleaning process
+    if st.button("Start Cleaning Process", key="clean_button"):
+        cleaned_df = clean_csv(uploaded_file, null_option)
+
+        if cleaned_df is not None:
+            cleaned_csv = cleaned_df.to_csv(index=False).encode("utf-8")
+
+            st.markdown("### 📥 Download Your Cleaned CSV")
+            st.download_button(
+                label="Download Cleaned File",
+                data=cleaned_csv,
+                file_name="cleaned_data.csv",
+                mime="text/csv"
+            )
+    else:
+        st.info("👆 Select your null handling option and click 'Start Cleaning Process' to begin.")
+else:
+    st.info("👆 Upload a CSV file to get started.")
+
+st.markdown("---")
+st.markdown(
+    "<center><small>Made for Open Source Tech Project</small></center>",
+    unsafe_allow_html=True
+)
