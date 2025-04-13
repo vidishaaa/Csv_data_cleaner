@@ -109,18 +109,22 @@ if uploaded_file:
         "Drop columns with >50% nulls"
     ])
 
-    cleaned_df = clean_csv(uploaded_file, null_option)
+    # Add a button to trigger the cleaning process
+    if st.button("Start Cleaning Process", key="clean_button"):
+        cleaned_df = clean_csv(uploaded_file, null_option)
 
-    if cleaned_df is not None:
-        cleaned_csv = cleaned_df.to_csv(index=False).encode("utf-8")
+        if cleaned_df is not None:
+            cleaned_csv = cleaned_df.to_csv(index=False).encode("utf-8")
 
-        st.markdown("### 📥 Download Your Cleaned CSV")
-        st.download_button(
-            label="Download Cleaned File",
-            data=cleaned_csv,
-            file_name="cleaned_data.csv",
-            mime="text/csv"
-        )
+            st.markdown("### 📥 Download Your Cleaned CSV")
+            st.download_button(
+                label="Download Cleaned File",
+                data=cleaned_csv,
+                file_name="cleaned_data.csv",
+                mime="text/csv"
+            )
+    else:
+        st.info("👆 Select your null handling option and click 'Start Cleaning Process' to begin.")
 else:
     st.info("👆 Upload a CSV file to get started.")
 
