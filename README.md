@@ -74,9 +74,6 @@ pip install pandas
 streamlit run app.py
 ---
 
-## Frontend
-![frontend]()
-
 ## ✅ Output Preview
 After successful execution, your cleaned CSV will be saved as cleaned_sample.csv or whatever output filename you provided.
 
